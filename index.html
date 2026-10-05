@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>バナー色違いメーカー</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{--bg:#f5f5f7;--panel:#fff;--fg:#1d1d1f;--mut:#6e6e73;--bd:#d2d2d7;--ac:#e8192c}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--panel:#1c1c20;--fg:#f2f2f5;--mut:#9a9aa2;--bd:#34343a;--ac:#ff4d5e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,"Hiragino Sans",sans-serif;font-size:14px}
+header{padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{font-size:18px;margin:0}
+header .mut{color:var(--mut);font-size:12px}
+.wrap{display:grid;grid-template-columns:320px 1fr;gap:16px;padding:16px;max-width:1600px;margin:auto}
+@media (max-width:860px){.wrap{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--bd);border-radius:12px;padding:14px}
+.panel h2{font-size:13px;margin:14px 0 8px;color:var(--mut);font-weight:600}
+.panel h2:first-child{margin-top:0}
+#drop{border:2px dashed var(--bd);border-radius:10px;padding:18px;text-align:center;cursor:pointer;color:var(--mut)}
+#drop.on{border-color:var(--ac);color:var(--ac)}
+#drop img{max-width:100%;max-height:180px;display:block;margin:0 auto 8px;border-radius:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:flex;align-items:center;gap:6px;border:1px solid var(--bd);border-radius:20px;padding:4px 10px 4px 4px;cursor:pointer;user-select:none;font-size:12px}
+.chip input{display:none}
+.chip .sw{width:22px;height:22px;border-radius:50%;border:1px solid rgba(128,128,128,.4);display:flex;overflow:hidden}
+.chip .sw i{flex:1}
+.chip.sel{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 12%,transparent)}
+label.row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0}
+select,input[type=number]{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:4px 6px}
+.custom{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.custom input[type=color]{width:36px;height:28px;border:none;background:none;padding:0}
+button{background:var(--ac);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-weight:600;cursor:pointer;font-size:14px}
+button.sub{background:transparent;color:var(--fg);border:1px solid var(--bd)}
+button:disabled{opacity:.4;cursor:default}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--bd);border-radius:10px;overflow:hidden}
+.card canvas{width:100%;display:block;background:#888}
+.card .meta{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;gap:6px}
+.card .meta span{font-size:12px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .meta a{font-size:12px;color:var(--ac);text-decoration:none;white-space:nowrap;cursor:pointer}
+.empty{color:var(--mut);text-align:center;padding:60px 10px}
+.note{font-size:11px;color:var(--mut);line-height:1.6;margin-top:10px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎨 バナー色違いメーカー</h1>
+  <span class="mut">画像を入れる → 配色とデザインを選ぶ → まとめて生成。文言とレイアウトはそのまま、色と装飾だけを変えます。処理はすべてこのPC内で行い、画像はどこにも送りません。</span>
+</header>
+<div class="wrap">
+  <div class="panel">
+    <h2>① 元画像</h2>
+    <div id="drop"><div id="dropmsg">ここに画像をドラッグ<br>またはクリックして選択</div></div>
+    <input type="file" id="file" accept="image/*" hidden>
+    <label class="row">出力名の頭 <input id="base" style="width:150px" placeholder="CR23"></label>
+    <label class="row">ver の開始番号 <input type="number" id="ver" value="2" min="1" style="width:70px"></label>
+
+    <h2>② 配色（複数選択）</h2>
+    <div class="chips" id="palettes"></div>
+    <div class="custom" style="margin-top:8px">
+      <span style="font-size:12px;color:var(--mut)">自作:</span>
+      背景<input type="color" id="cBg" value="#0a0a0a">
+      文字<input type="color" id="cFg" value="#ffffff">
+      強調<input type="color" id="cAc" value="#00c48c">
+      <button class="sub" id="addCustom" style="padding:4px 10px;font-size:12px">追加</button>
+    </div>
+
+    <h2>③ デザイン（複数選択）</h2>
+    <div class="chips" id="designs"></div>
+
+    <h2>④ 細かい設定</h2>
+    <label class="row">強調色を見分ける強さ <input type="range" id="sens" min="0.1" max="0.6" step="0.05" value="0.25"></label>
+    <label class="row">明るい強調色に黒フチ
+      <select id="stroke"><option value="auto">自動</option><option value="on">常に</option><option value="off">なし</option></select></label>
+    <label class="row">書き出し形式
+      <select id="fmt"><option value="png">PNG</option><option value="jpeg">JPG (軽い)</option></select></label>
+
+    <div class="btns">
+      <button id="gen" disabled>生成する</button>
+      <button class="sub" id="zip" disabled>全部ZIPで保存</button>
+    </div>
+    <div class="note">
+      ・赤など色のついた部分＝「強調」、黒〜白の部分＝「背景〜文字」として色を置き換えます。<br>
+      ・写真入りバナーは肌色も強調色とみなされることがあります。その場合は「見分ける強さ」を上げてください。<br>
+      ・生成枚数 = 配色の数 × デザインの数。ファイル名は「CR23_ver2_金_枠.png」形式で、AutoAdがCR23の派生verとして扱います。
+    </div>
+  </div>
+
+  <div>
+    <div id="grid"><div class="empty">左で画像を入れて「生成する」を押すと、ここに並びます。<br>クリックで1枚ずつ保存、「全部ZIPで保存」でまとめて保存できます。</div></div>
+  </div>
+</div>
+
+<script>
+const PALETTES = [
+  {key:"orig",   name:"元の色", bg:null, fg:null, ac:null},
+  {key:"gold",   name:"金",     bg:"#08080a", fg:"#ffffff", ac:"#f0be28"},
+  {key:"yellow", name:"黄",     bg:"#0a0a0a", fg:"#ffffff", ac:"#ffe100"},
+  {key:"navy",   name:"紺×赤",  bg:"#0a163c", fg:"#ffffff", ac:"#eb1e2d"},
+  {key:"pink",   name:"ピンク", bg:"#0c080c", fg:"#ffffff", ac:"#ff3c96"},
+  {key:"blue",   name:"青",     bg:"#06080e", fg:"#ffffff", ac:"#1e8cff"},
+  {key:"green",  name:"緑",     bg:"#06100a", fg:"#ffffff", ac:"#14c864"},
+  {key:"purple", name:"紫",     bg:"#0e0816", fg:"#ffffff", ac:"#a050ff"},
+  {key:"orange", name:"オレンジ",bg:"#0c0806", fg:"#ffffff", ac:"#ff7a00"},
+  {key:"white",  name:"白地反転",bg:"#faf9f6", fg:"#0f0f0f", ac:"#dc141e"},
+  {key:"cream",  name:"クリーム",bg:"#fff4dc", fg:"#2a1a0a", ac:"#c8141e"},
+];
+const DESIGNS = [
+  {key:"plain",   name:"そのまま"},
+  {key:"frame",   name:"枠"},
+  {key:"double",  name:"二重枠"},
+  {key:"grad",    name:"背景グラデ"},
+  {key:"radial",  name:"中心光"},
+  {key:"burst",   name:"集中線"},
+  {key:"vignette",name:"周辺暗く"},
+  {key:"noise",   name:"ザラ質感"},
+  {key:"stripe",  name:"斜めストライプ"},
+];
+const state = {img:null, name:"", results:[], sel:new Set(["gold","navy","pink","white"]), dsel:new Set(["plain","frame"]), custom:[]};
+
+const hex = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255);
+const lumOf = c => .299*c[0]+.587*c[1]+.114*c[2];
+
+function chip(container, item, set, swatch){
+  const el=document.createElement("label"); el.className="chip"+(set.has(item.key)?" sel":"");
+  el.innerHTML=(swatch?`<span class="sw">${swatch}</span>`:"")+item.name;
+  el.onclick=e=>{e.preventDefault(); set.has(item.key)?set.delete(item.key):set.add(item.key); el.classList.toggle("sel");};
+  container.appendChild(el);
+}
+function renderChips(){
+  const p=document.getElementById("palettes"); p.innerHTML="";
+  [...PALETTES,...state.custom].forEach(x=>chip(p,x,state.sel, x.bg?`<i style="background:${x.bg}"></i><i style="background:${x.ac}"></i><i style="background:${x.fg}"></i>`:`<i style="background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)"></i>`));
+  const d=document.getElementById("designs"); d.innerHTML="";
+  DESIGNS.forEach(x=>chip(d,x,state.dsel));
+}
+renderChips();
+document.getElementById("addCustom").onclick=()=>{
+  const n=state.custom.length+1, key="custom"+n;
+  state.custom.push({key,name:"自作"+n,bg:cBg.value,fg:cFg.value,ac:cAc.value}); state.sel.add(key); renderChips();
+};
+
+// ---------- 画像読み込み ----------
+const drop=document.getElementById("drop"), file=document.getElementById("file");
+drop.onclick=()=>file.click();
+drop.ondragover=e=>{e.preventDefault();drop.classList.add("on")};
+drop.ondragleave=()=>drop.classList.remove("on");
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove("on"); if(e.dataTransfer.files[0]) load(e.dataTransfer.files[0]);};
+file.onchange=()=>file.files[0]&&load(file.files[0]);
+document.addEventListener("paste",e=>{const f=[...e.clipboardData.files].find(f=>f.type.startsWith("image/")); if(f) load(f);});
+function load(f){
+  const url=URL.createObjectURL(f), img=new Image();
+  img.onload=()=>{
+    state.img=img; state.name=f.name.replace(/\.[^.]+$/,"");
+    const m=state.name.match(/CR[_\-\s]?\d{1,3}/i);
+    document.getElementById("base").value=m?m[0].replace(/[_\-\s]/,"").toUpperCase():state.name;
+    drop.innerHTML=`<img src="${url}"><div style="font-size:12px">${f.name}（${img.naturalWidth}×${img.naturalHeight}）<br>クリックで差し替え</div>`;
+    gen.disabled=false;
+  };
+  img.src=url;
+}
+
+// ---------- 色の置き換え ----------
+function bgField(design, W, H, bg, ac){
+  // 背景色を位置ごとに返す（グラデ系のデザイン用）
+  const dark = lumOf(bg) < .5;
+  const lift = (c,t)=> c.map((v,i)=> v + ((dark? ac[i]*.55 : ac[i]*.25+.75) - v)*t);
+  if(design==="grad")   return (x,y)=> lift(bg, .45*(y/H));
+  if(design==="radial") return (x,y)=>{const d=Math.hypot(x/W-.5,y/H-.5)/.71; return lift(bg, .42*Math.max(0,1-d*1.4));};
+  if(design==="burst")  return (x,y)=>{const a=Math.atan2(y-H/2,x-W/2); const s=(Math.sin(a*36)>0.55)?1:0; return lift(bg, .2*s);};
+  if(design==="stripe") return (x,y)=>{const s=(((x+y)/(W*0.045))|0)%2; return lift(bg, .08*s);};
+  return null;
+}
+
+function maxFilter(mask, W, H, r){
+  const tmp=new Uint8Array(W*H), out=new Uint8Array(W*H);
+  for(let y=0;y<H;y++){let row=y*W; for(let x=0;x<W;x++){let m=0; for(let k=-r;k<=r&&!m;k++){const xx=x+k; if(xx>=0&&xx<W&&mask[row+xx]) m=1;} tmp[row+x]=m;}}
+  for(let x=0;x<W;x++){for(let y=0;y<H;y++){let m=0; for(let k=-r;k<=r&&!m;k++){const yy=y+k; if(yy>=0&&yy<H&&tmp[yy*W+x]) m=1;} out[y*W+x]=m;}}
+  return out;
+}
+
+function make(pal, design){
+  const img=state.img, W=img.naturalWidth, H=img.naturalHeight;
+  const cv=document.createElement("canvas"); cv.width=W; cv.height=H;
+  const ctx=cv.getContext("2d"); ctx.drawImage(img,0,0);
+  const id=ctx.getImageData(0,0,W,H), d=id.data;
+  const sens=+document.getElementById("sens").value;
+
+  if(pal.bg){
+    const bg=hex(pal.bg), fg=hex(pal.fg), ac=hex(pal.ac);
+    const field=bgField(design,W,H,bg,ac);
+    const strokeMode=document.getElementById("stroke").value;
+    const useStroke = strokeMode==="on" || (strokeMode==="auto" && lumOf(ac)>.55 && lumOf(bg)<.5);
+    const wArr=new Float32Array(W*H), white=useStroke?new Uint8Array(W*H):null;
+    for(let i=0,p=0;i<d.length;i+=4,p++){
+      const r=d[i]/255,g=d[i+1]/255,b=d[i+2]/255;
+      const mx=Math.max(r,g,b), mn=Math.min(r,g,b);
+      const sat=mx>1e-6?(mx-mn)/mx:0;
+      const w=Math.min(1,Math.max(0,(sat-sens)/.30))*Math.min(1,mx/.15);
+      wArr[p]=w;
+      const lum=.299*r+.587*g+.114*b;
+      const x=p%W, y=(p/W)|0;
+      const B=field?field(x,y):bg;
+      const gray=[0,1,2].map(k=>B[k]+(fg[k]-B[k])*lum);
+      const wm=Math.min(1,Math.max(0,(mn-.35)/.65));
+      const lightBg=lumOf(bg)>.5;
+      const acc=[0,1,2].map(k=>ac[k]*mx*(1-wm)+fg[k]*wm + (lightBg? B[k]*(1-mx):0));
+      for(let k=0;k<3;k++) d[i+k]=Math.round(Math.min(1,Math.max(0,gray[k]*(1-w)+acc[k]*w))*255);
+      if(white) white[p]= (lum*(1-w)>.6)?1:0;
+    }
+    if(useStroke){
+      const near=maxFilter(white,W,H,Math.max(2,Math.round(W/400)));
+      for(let p=0,i=0;p<W*H;p++,i+=4){ const k=wArr[p]*near[p]; if(k>0) for(let c=0;c<3;c++) d[i+c]=Math.round(d[i+c]*(1-k)+15*k); }
+    }
+    ctx.putImageData(id,0,0);
+  } else if(["grad","radial","burst","stripe"].includes(design)){
+    // 元の色のまま: 暗い背景部分にだけ模様をうっすら重ねる
+    const field=bgField(design,W,H,[0,0,0],[1,1,1]);
+    for(let i=0,p=0;i<d.length;i+=4,p++){
+      const r=d[i]/255,g=d[i+1]/255,b=d[i+2]/255, mx=Math.max(r,g,b);
+      const t=Math.max(0,1-mx/.18); if(!t) continue;
+      const f=field(p%W,(p/W)|0); for(let k=0;k<3;k++) d[i+k]=Math.round(Math.min(1,[r,g,b][k]+f[k]*t)*255);
+    }
+    ctx.putImageData(id,0,0);
+  }
+
+  // 仕上げの装飾
+  const acc = pal.ac || "#e8192c", lw=Math.round(W*0.012);
+  if(design==="frame"){ ctx.strokeStyle=acc; ctx.lineWidth=lw*1.6; ctx.strokeRect(lw*.8,lw*.8,W-lw*1.6,H-lw*1.6); }
+  if(design==="double"){ ctx.strokeStyle=acc; ctx.lineWidth=lw*1.2; ctx.strokeRect(lw*.6,lw*.6,W-lw*1.2,H-lw*1.2);
+    ctx.strokeStyle=pal.fg||"#fff"; ctx.lineWidth=lw*.45; ctx.strokeRect(lw*2,lw*2,W-lw*4,H-lw*4); }
+  if(design==="vignette"){ const g=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*.35,W/2,H/2,Math.hypot(W,H)/2);
+    g.addColorStop(0,"rgba(0,0,0,0)"); g.addColorStop(1,"rgba(0,0,0,.55)"); ctx.fillStyle=g; ctx.fillRect(0,0,W,H); }
+  if(design==="noise"){ const n=ctx.getImageData(0,0,W,H), a=n.data;
+    for(let i=0;i<a.length;i+=4){const v=(Math.random()-.5)*26; a[i]+=v;a[i+1]+=v;a[i+2]+=v;} ctx.putImageData(n,0,0); }
+  return cv;
+}
+
+// ---------- 生成と保存 ----------
+const gen=document.getElementById("gen"), zipBtn=document.getElementById("zip"), grid=document.getElementById("grid");
+gen.onclick=async()=>{
+  if(!state.img) return;
+  const pals=[...PALETTES,...state.custom].filter(p=>state.sel.has(p.key));
+  const des=DESIGNS.filter(x=>state.dsel.has(x.key));
+  if(!pals.length||!des.length){ alert("配色とデザインを1つ以上選んでください"); return; }
+  grid.innerHTML=""; state.results=[]; gen.disabled=true; zipBtn.disabled=true;
+  const fmt=document.getElementById("fmt").value, ext=fmt==="png"?"png":"jpg";
+  let ver=+document.getElementById("ver").value||2; const base=document.getElementById("base").value||state.name;
+  for(const p of pals) for(const ds of des){
+    if(p.key==="orig"&&ds.key==="plain") continue;
+    gen.textContent=`生成中… ${state.results.length+1}/${pals.length*des.length}`;
+    await new Promise(r=>setTimeout(r,10));
+    const cv=make(p,ds.key);
+    const name=`${base}_ver${ver++}_${p.name}${ds.key==="plain"?"":"_"+ds.name}.${ext}`;
+    const card=document.createElement("div"); card.className="card";
+    const prev=document.createElement("canvas"); const s=460/Math.max(cv.width,cv.height);
+    prev.width=cv.width*s; prev.height=cv.height*s; prev.getContext("2d").drawImage(cv,0,0,prev.width,prev.height);
+    card.appendChild(prev);
+    const meta=document.createElement("div"); meta.className="meta";
+    meta.innerHTML=`<span title="${name}">${name}</span><a>保存</a>`;
+    const item={name,cv,fmt}; meta.querySelector("a").onclick=()=>save(item);
+    prev.style.cursor="zoom-in"; prev.onclick=()=>cv.toBlob(b=>window.open(URL.createObjectURL(b)),"image/png");
+    card.appendChild(meta); grid.appendChild(card); state.results.push(item);
+  }
+  gen.textContent="生成する"; gen.disabled=false; zipBtn.disabled=!state.results.length;
+};
+const blobOf=it=>new Promise(r=>it.cv.toBlob(r,"image/"+it.fmt,.92));
+async function save(it){ const b=await blobOf(it), a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=it.name; a.click(); }
+zipBtn.onclick=async()=>{
+  if(typeof JSZip==="undefined"){ for(const it of state.results) await save(it); return; }
+  zipBtn.textContent="作成中…"; const z=new JSZip();
+  for(const it of state.results) z.file(it.name, await blobOf(it));
+  const b=await z.generateAsync({type:"blob"}), a=document.createElement("a");
+  a.href=URL.createObjectURL(b); a.download=(document.getElementById("base").value||"banner")+"_色違い.zip"; a.click();
+  zipBtn.textContent="全部ZIPで保存";
+};
+</script>
+</body>
+</html>
