@@ -6,7 +6,20 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>バナー色違いメーカー</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@900&family=Noto+Sans+JP:wght@900&family=Dela+Gothic+One&family=Zen+Old+Mincho:wght@900&display=swap" rel="stylesheet">
 <style>
+.tabs{display:flex;gap:6px;margin-bottom:12px}
+.tabs button{background:transparent;color:var(--fg);border:1px solid var(--bd)}
+.tabs button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+textarea,input[type=password],input[type=text]{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:6px;font:inherit;font-size:13px}
+.intent{background:var(--panel);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:13px;line-height:1.7}
+.intent b{color:var(--ac)}
+.card .why{padding:0 10px 10px;font-size:12px;line-height:1.6;color:var(--mut)}
+.card .why .risk{color:#d97706}
+.card .meta .acts{display:flex;gap:10px}
+.status{font-size:12px;color:var(--mut);margin-top:8px;white-space:pre-wrap}
+.status.err{color:var(--ac)}
 :root{--bg:#f5f5f7;--panel:#fff;--fg:#1d1d1f;--mut:#6e6e73;--bd:#d2d2d7;--ac:#e8192c}
 @media (prefers-color-scheme:dark){:root{--bg:#111114;--panel:#1c1c20;--fg:#f2f2f5;--mut:#9a9aa2;--bd:#34343a;--ac:#ff4d5e}}
 *{box-sizing:border-box}
@@ -88,9 +101,36 @@ button:disabled{opacity:.4;cursor:default}
       ・写真入りバナーは肌色も強調色とみなされることがあります。その場合は「見分ける強さ」を上げてください。<br>
       ・生成枚数 = 配色の数 × デザインの数。ファイル名は「CR23_ver2_金_枠.png」形式で、AutoAdがCR23の派生verとして扱います。
     </div>
+
+    <h2 style="margin-top:22px;border-top:1px solid var(--bd);padding-top:16px">⑤ 横展開（AIが意図を読んで別案を作る）</h2>
+    <label class="row">案の数 <select id="xN"><option>3</option><option selected>4</option><option>6</option></select></label>
+    <div style="font-size:12px;color:var(--mut);margin:6px 0 4px">変える方向（複数可）</div>
+    <div class="chips" id="xDirs"></div>
+    <div style="font-size:12px;color:var(--mut);margin:10px 0 4px">追加の指示（任意）</div>
+    <textarea id="xNote" rows="2" placeholder="例: 30代既婚者向けも1案 / 「限定公開中」は残す / 数字は使わない"></textarea>
+    <label class="row">文字の書体
+      <select id="xFont">
+        <option value="Noto Serif JP">太明朝（Noto Serif）</option>
+        <option value="Zen Old Mincho">太明朝（Zen Old）</option>
+        <option value="Noto Sans JP">太ゴシック</option>
+        <option value="Dela Gothic One">極太ゴシック</option>
+      </select></label>
+    <label class="row">AIモデル
+      <select id="xModel"><option value="claude-opus-5-5">Opus 5.5（質重視）</option><option value="claude-sonnet-5-5">Sonnet 5.5（速い・安い）</option></select></label>
+    <div style="font-size:12px;color:var(--mut);margin:10px 0 4px">Anthropic APIキー（このブラウザにだけ保存）</div>
+    <input type="password" id="xKey" placeholder="sk-ant-...">
+    <div class="btns"><button id="xGo" disabled>意図を読んで横展開</button></div>
+    <div class="status" id="xStatus"></div>
+    <div class="note">
+      ・AIが画像の文字・構成・狙い（誰の・どんな悩みに・何を約束しているか）を読み取り、同じレイアウトの型で別の切り口の案を描き直します。<br>
+      ・1回あたり数円〜十数円のAPI料金がかかります。キーはAnthropic以外には送りません。<br>
+      ・案には媒体審査で引っかかりやすい表現の注意が付きます。入稿前は人の目で確認してください。<br>
+      ・気に入った案は「色違いへ」で元画像に差し替えると、①〜④の色違いもそのまま作れます。
+    </div>
   </div>
 
   <div>
+    <div id="ideas"></div>
     <div id="grid"><div class="empty">左で画像を入れて「生成する」を押すと、ここに並びます。<br>クリックで1枚ずつ保存、「全部ZIPで保存」でまとめて保存できます。</div></div>
   </div>
 </div>
@@ -158,7 +198,7 @@ function load(f){
     const m=state.name.match(/CR[_\-\s]?\d{1,3}/i);
     document.getElementById("base").value=m?m[0].replace(/[_\-\s]/,"").toUpperCase():state.name;
     drop.innerHTML=`<img src="${url}"><div style="font-size:12px">${f.name}（${img.naturalWidth}×${img.naturalHeight}）<br>クリックで差し替え</div>`;
-    gen.disabled=false;
+    gen.disabled=false; state.file=f; document.getElementById("xGo").disabled=false;
   };
   img.src=url;
 }
@@ -276,6 +316,185 @@ zipBtn.onclick=async()=>{
   const b=await z.generateAsync({type:"blob"}), a=document.createElement("a");
   a.href=URL.createObjectURL(b); a.download=(document.getElementById("base").value||"banner")+"_色違い.zip"; a.click();
   zipBtn.textContent="全部ZIPで保存";
+};
+
+// ================= 横展開（AI） =================
+const XDIRS = [
+  {key:"appeal", name:"訴求を変える",   hint:"約束するベネフィット（得られる結果）の種類を変える"},
+  {key:"hook",   name:"フックを変える", hint:"冒頭の呼びかけ・掴みの言葉を変える（問いかけ/断言/数字/禁止/共感など）"},
+  {key:"target", name:"ターゲットを変える", hint:"年代・状況・悩みの深さが違う人に向けて言い直す"},
+  {key:"pain",   name:"悩みの切り口",   hint:"同じ商品でも別の悩み・別の場面から入る"},
+  {key:"proof",  name:"権威・根拠を足す", hint:"実績・人数・期間などの根拠で信頼を足す（ただし根拠のない数字は作らない）"},
+  {key:"tone",   name:"トーンを変える", hint:"煽り⇄やさしく寄り添う、など温度感を変える"},
+];
+const xsel = new Set(["appeal","hook","target"]);
+(()=>{ const c=document.getElementById("xDirs"); XDIRS.forEach(x=>chip(c,x,xsel)); })();
+const xKey=document.getElementById("xKey"), xGo=document.getElementById("xGo"), xStatus=document.getElementById("xStatus");
+try{ xKey.value=localStorage.getItem("bv_anthropic_key")||""; }catch(e){}
+xKey.onchange=()=>{ try{ localStorage.setItem("bv_anthropic_key", xKey.value.trim()); }catch(e){} };
+
+const X_SYSTEM = `あなたは日本のダイレクトレスポンス広告のクリエイティブディレクターです。
+渡された広告バナー画像を読み、(1)狙い（意図）を言語化し、(2)画像の文字と構成を正確に書き起こし、(3)同じレイアウトの型を保ったまま「横展開」の別案を作ります。
+
+横展開のルール:
+- 元バナーの「誰の・どんな悩みに・何を約束し・どう行動させるか」という骨格を理解したうえで、指定された方向だけを変える。商品・サービスの中身は変えない。
+- 行数・各行の役割（呼びかけ/前提の否定/メインの約束/行動喚起/限定/注意書き 等）・各行の文字数は元とほぼ同じにする（±25%）。同じレイアウトに収めるため。
+- 強調（accent）にする語は、元と同じくその行で一番伝えたい語にする。
+- 案どうしで切り口が被らないようにする。
+- 媒体審査（Meta/Google）と景品表示法を意識する。効果の断定・保証、根拠のない数字、身体的特徴や年齢などの個人の属性を名指しで否定する表現、性的に露骨な表現は避けるか弱める。元バナーにそういう表現がある場合も risk に書く。
+- 根拠のない実績数字は作らない。必要なら「○○」のような伏せ字にして risk に「要根拠」と書く。
+
+書き起こしのルール:
+- lines は上から順に、画像上の1行（または1つの帯・枠）ごとに1要素。
+- segs は行内を色ごとに区切ったもの。c は "text"（基本の文字色）/ "accent"（強調色）/ "dark"（帯の上に乗る暗い文字）のどれか。
+- style は行の装飾: "plain"（装飾なし）/ "underline"（下に強調色の線）/ "brush_light"（白っぽい筆の帯の上に文字）/ "brush_accent"（強調色の筆の帯の上に文字）/ "box"（強調色の四角い枠で囲む）/ "band"（強調色のベタ帯）。
+- size は画像の高さに対するその行の高さの割合（0.03〜0.35）。全行の合計が0.85〜0.95程度になるように。
+- palette は画像の実際の色を16進で。
+
+出力はJSONのみ（前後に文章やコードフェンスを付けない）。形式:
+{
+ "intent": {"target":"誰に","pain":"どんな悩み","promise":"何を約束","hook":"掴みの仕掛け","cta":"どう行動させるか","tone":"トーン","why_works":"なぜ反応しそうか（1文）"},
+ "palette": {"bg":"#0a0a0a","text":"#ffffff","accent":"#e8192c","dark":"#111111"},
+ "original": {"lines":[{"segs":[{"t":"本当に","c":"text"},{"t":"女性関係で悩んでいる","c":"accent"},{"t":"方へ","c":"text"}],"size":0.08,"style":"underline"}]},
+ "variants": [{"name":"切り口の短い名前","direction":"何を変えたか","why":"狙い（1文）","risk":"審査・法令上の注意（無ければ空文字）","lines":[...originalと同じ形式...]}]
+}`;
+
+async function imageB64(img, maxSide=1280){
+  const s=Math.min(1, maxSide/Math.max(img.naturalWidth,img.naturalHeight));
+  const c=document.createElement("canvas"); c.width=Math.round(img.naturalWidth*s); c.height=Math.round(img.naturalHeight*s);
+  c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+  return c.toDataURL("image/jpeg",.9).split(",")[1];
+}
+
+function parseJSON(text){
+  const t=text.trim().replace(/^```(?:json)?\s*/,"").replace(/```\s*$/,"");
+  try{ return JSON.parse(t); }catch(e){}
+  const a=t.indexOf("{"), b=t.lastIndexOf("}");
+  return JSON.parse(t.slice(a,b+1));
+}
+
+async function askClaude(){
+  const key=xKey.value.trim();
+  if(!key){ throw new Error("APIキーを入れてください（Anthropic Console → API Keys で発行）"); }
+  const dirs=XDIRS.filter(d=>xsel.has(d.key)).map(d=>`- ${d.name}: ${d.hint}`).join("\n") || "- 自由（元の意図を保ったまま、反応が取れそうな別の切り口）";
+  const n=+document.getElementById("xN").value;
+  const note=document.getElementById("xNote").value.trim();
+  const user=`このバナーの横展開を${n}案作ってください。\n変える方向:\n${dirs}${note?`\n追加の指示: ${note}`:""}\n案ごとに変える方向を散らしてください。`;
+  const res=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{"content-type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    body:JSON.stringify({model:document.getElementById("xModel").value, max_tokens:8000, system:X_SYSTEM,
+      messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:await imageB64(state.img)}},{type:"text",text:user}]}]})
+  });
+  const body=await res.json().catch(()=>({}));
+  if(!res.ok){
+    const m=body?.error?.message||res.statusText;
+    if(res.status===401) throw new Error("APIキーが正しくありません（401）");
+    if(res.status===429) throw new Error("混み合っているか利用上限です。少し待って再実行してください（429）");
+    throw new Error(`APIエラー ${res.status}: ${m}`);
+  }
+  const text=(body.content||[]).filter(c=>c.type==="text").map(c=>c.text).join("");
+  return parseJSON(text);
+}
+
+// ---------- 描き直し ----------
+function rng(seed){ let s=seed>>>0||1; return ()=>((s=Math.imul(s^s>>>15,1|s)+0x6D2B79F5)>>>0)/4294967296; }
+function brushBar(ctx,x,y,w,h,color,seed){
+  const r=rng(seed); ctx.save(); ctx.fillStyle=color; ctx.beginPath();
+  const n=48, j=h*.07; ctx.moveTo(x, y+h*.15);
+  for(let i=0;i<=n;i++) ctx.lineTo(x+w*i/n, y+(r()-.5)*j*2+(i%7===0?j:0));
+  for(let i=0;i<=8;i++) ctx.lineTo(x+w+(r()*.04)*w, y+h*i/8);
+  for(let i=n;i>=0;i--) ctx.lineTo(x+w*i/n, y+h+(r()-.5)*j*2-(i%5===0?j:0));
+  for(let i=8;i>=0;i--) ctx.lineTo(x-(r()*.04)*w, y+h*i/8);
+  ctx.closePath(); ctx.fill();
+  ctx.globalAlpha=.85; // かすれ（筆の毛）
+  for(let i=0;i<26;i++){ const yy=y+r()*h, len=w*(.04+r()*.1), side=r()<.5; ctx.fillRect(side?x-len*.6:x+w-len*.4, yy, len, Math.max(1,h*.012*r())); }
+  ctx.restore();
+}
+function drawLayout(lines, pal, W, H, font){
+  const cv=document.createElement("canvas"); cv.width=W; cv.height=H; const ctx=cv.getContext("2d");
+  ctx.fillStyle=pal.bg; ctx.fillRect(0,0,W,H);
+  const gap=.012, total=lines.reduce((a,l)=>a+(+l.size||.08),0)+gap*(lines.length-1);
+  const k=Math.min(1.25,.94/Math.max(total,.01)); let y=(H-(total*k*H))/2;
+  const col=c=>c==="accent"?pal.accent:c==="dark"?(pal.dark||"#111"):pal.text;
+  lines.forEach((l,li)=>{
+    const h=(+l.size||.08)*k*H, st=l.style||"plain", segs=(l.segs||[]).filter(s=>s.t);
+    const onBar=st.startsWith("brush")||st==="band", pad=st==="box"?h*.16:0;
+    let fs=h*(onBar?.68:st==="box"?.7:.86), maxW=W*(onBar?.84:.92)-pad*2;
+    const measure=()=>{ ctx.font=`900 ${fs}px "${font}", serif`; return segs.reduce((a,s)=>a+ctx.measureText(s.t).width,0); };
+    let tw=measure(); if(tw>maxW){ fs*=maxW/tw; tw=measure(); }
+    const cy=y+h/2;
+    if(st==="brush_light") brushBar(ctx,(W-W*.9)/2,y,W*.9,h,lumOf(hex(pal.bg))<.5?"#f4f4f2":pal.dark||"#111",li*97+7);
+    if(st==="brush_accent") brushBar(ctx,(W-W*.94)/2,y,W*.94,h,pal.accent,li*131+3);
+    if(st==="band"){ ctx.fillStyle=pal.accent; ctx.fillRect(W*.03,y,W*.94,h); }
+    if(st==="box"){ const bw=Math.min(W*.96,tw+pad*2.4), bx=(W-bw)/2; ctx.strokeStyle=pal.accent;
+      ctx.lineWidth=h*.06; ctx.strokeRect(bx,y+h*.04,bw,h*.92); ctx.lineWidth=h*.015; ctx.strokeRect(bx+h*.07,y+h*.11,bw-h*.14,h*.78); }
+    let x=(W-tw)/2; ctx.textBaseline="middle"; ctx.font=`900 ${fs}px "${font}", serif`;
+    const lightBar = st==="brush_light";
+    segs.forEach(s=>{
+      let c=col(s.c);
+      if(lightBar && s.c==="text") c=lumOf(hex(pal.bg))<.5?(pal.dark||"#111"):pal.text;
+      if(!onBar){ ctx.lineJoin="round"; ctx.strokeStyle=pal.bg; ctx.lineWidth=fs*.1; ctx.strokeText(s.t,x,cy); }
+      ctx.fillStyle=c; ctx.fillText(s.t,x,cy); x+=ctx.measureText(s.t).width;
+    });
+    if(st==="underline"){ ctx.fillStyle=pal.accent; const uw=W*.9; ctx.beginPath();
+      ctx.moveTo((W-uw)/2,y+h*.97); ctx.lineTo((W+uw)/2,y+h*.93); ctx.lineTo((W+uw)/2,y+h*.99); ctx.lineTo((W-uw)/2,y+h*1.02); ctx.fill(); }
+    y+=h+gap*k*H;
+  });
+  return cv;
+}
+
+function ideaCard(cv, title, why, risk, fname){
+  const card=document.createElement("div"); card.className="card";
+  const prev=document.createElement("canvas"); const s=460/Math.max(cv.width,cv.height);
+  prev.width=cv.width*s; prev.height=cv.height*s; prev.getContext("2d").drawImage(cv,0,0,prev.width,prev.height);
+  prev.style.cursor="zoom-in"; prev.onclick=()=>cv.toBlob(b=>window.open(URL.createObjectURL(b)),"image/png");
+  card.appendChild(prev);
+  const meta=document.createElement("div"); meta.className="meta";
+  meta.innerHTML=`<span title="${fname}">${title}</span><span class="acts"><a data-a="save">保存</a><a data-a="use">色違いへ</a></span>`;
+  meta.querySelector('[data-a=save]').onclick=()=>save({name:fname,cv,fmt:document.getElementById("fmt").value});
+  meta.querySelector('[data-a=use]').onclick=()=>cv.toBlob(b=>{ load(new File([b],fname.replace(/\.\w+$/,"")+".png",{type:"image/png"})); window.scrollTo({top:0,behavior:"smooth"}); },"image/png");
+  card.appendChild(meta);
+  const w=document.createElement("div"); w.className="why";
+  w.innerHTML=(why?esc(why):"")+(risk?`<br><span class="risk">⚠ ${esc(risk)}</span>`:"");
+  card.appendChild(w);
+  return card;
+}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function renderIdeas(data){
+  const ideas=document.getElementById("ideas"); ideas.innerHTML="";
+  const font=document.getElementById("xFont").value, W=state.img.naturalWidth, H=state.img.naturalHeight;
+  const pal=Object.assign({bg:"#0a0a0a",text:"#ffffff",accent:"#e8192c",dark:"#111111"}, data.palette||{});
+  const it=data.intent||{};
+  const box=document.createElement("div"); box.className="intent";
+  box.innerHTML=`<b>AIが読み取った意図</b><br>誰に: ${esc(it.target||"-")}　／　悩み: ${esc(it.pain||"-")}<br>約束: ${esc(it.promise||"-")}　／　掴み: ${esc(it.hook||"-")}　／　行動: ${esc(it.cta||"-")}<br>トーン: ${esc(it.tone||"-")}　／　${esc(it.why_works||"")}`;
+  ideas.appendChild(box);
+  const g=document.createElement("div"); g.id="xgrid"; g.style.cssText="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin-bottom:20px";
+  ideas.appendChild(g);
+  const base=document.getElementById("base").value||state.name;
+  if(data.original?.lines) g.appendChild(ideaCard(drawLayout(data.original.lines,pal,W,H,font),"（参考）元の書き起こし","描き直しの再現度の確認用。元画像とずれていれば書体を変えてください。","",`${base}_書き起こし.png`));
+  const ext=document.getElementById("fmt").value==="png"?"png":"jpg";
+  (data.variants||[]).forEach((v,i)=>{
+    const fname=`${base}_横展開${i+1}_${(v.name||"案").replace(/[\\/:*?"<>|\s]/g,"")}.${ext}`;
+    g.appendChild(ideaCard(drawLayout(v.lines||[],pal,W,H,font), `案${i+1}：${v.name||""}`, `${v.direction?"【"+v.direction+"】":""}${v.why||""}`, v.risk||"", fname));
+  });
+  state.lastIdeas=data;
+}
+document.getElementById("xFont").onchange=()=>{ if(state.lastIdeas){ const f=document.getElementById("xFont").value; document.fonts.load(`900 40px "${f}"`).then(()=>renderIdeas(state.lastIdeas)); } };
+
+xGo.onclick=async()=>{
+  if(!state.img) return;
+  xGo.disabled=true; xStatus.className="status"; const t0=Date.now();
+  const tick=setInterval(()=>xStatus.textContent=`AIがバナーを読んで案を作っています…（${((Date.now()-t0)/1000)|0}秒）`,500);
+  try{
+    const font=document.getElementById("xFont").value;
+    const [data]=await Promise.all([askClaude(), document.fonts.load(`900 40px "${font}"`)]);
+    renderIdeas(data);
+    xStatus.textContent=`${(data.variants||[]).length}案できました（${((Date.now()-t0)/1000)|0}秒）。右側の上に並んでいます。`;
+    document.getElementById("ideas").scrollIntoView({behavior:"smooth"});
+  }catch(e){ xStatus.className="status err"; xStatus.textContent=e.message||String(e); }
+  finally{ clearInterval(tick); xGo.disabled=false; }
 };
 </script>
 </body>
