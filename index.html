@@ -9,8 +9,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@900&family=Noto+Sans+JP:wght@900&family=Dela+Gothic+One&family=Zen+Old+Mincho:wght@900&display=swap" rel="stylesheet">
 <style>
-.tabs{display:flex;gap:6px;margin-bottom:12px}
-.tabs button{background:transparent;color:var(--fg);border:1px solid var(--bd)}
+[hidden]{display:none!important}
+.tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.tabs button{flex:1;padding:9px 6px;background:transparent;color:var(--fg);border:1px solid var(--bd)}
 .tabs button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
 textarea,input[type=password],input[type=text]{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:6px;font:inherit;font-size:13px}
 .intent{background:var(--panel);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:13px;line-height:1.7}
@@ -72,6 +73,12 @@ button:disabled{opacity:.4;cursor:default}
     <label class="row">出力名の頭 <input id="base" style="width:150px" placeholder="CR23"></label>
     <label class="row">ver の開始番号 <input type="number" id="ver" value="2" min="1" style="width:70px"></label>
 
+    <h2>作り方を選ぶ</h2>
+    <div class="tabs" id="modeTabs">
+      <button data-m="color" class="on">🎨 色違い</button>
+      <button data-m="ai">💡 横展開（AI）</button>
+    </div>
+    <div id="mode-color">
     <h2>② 配色（複数選択）</h2>
     <div class="chips" id="palettes"></div>
     <div class="custom" style="margin-top:8px">
@@ -102,7 +109,9 @@ button:disabled{opacity:.4;cursor:default}
       ・生成枚数 = 配色の数 × デザインの数。ファイル名は「CR23_ver2_金_枠.png」形式で、AutoAdがCR23の派生verとして扱います。
     </div>
 
-    <h2 style="margin-top:22px;border-top:1px solid var(--bd);padding-top:16px">⑤ 横展開（AIが意図を読んで別案を作る）</h2>
+    </div>
+    <div id="mode-ai" hidden>
+    <h2>② 横展開（AIが意図を読んで別案を作る）</h2>
     <label class="row">案の数 <select id="xN"><option>3</option><option selected>4</option><option>6</option></select></label>
     <div style="font-size:12px;color:var(--mut);margin:6px 0 4px">変える方向（複数可）</div>
     <div class="chips" id="xDirs"></div>
@@ -125,13 +134,14 @@ button:disabled{opacity:.4;cursor:default}
       ・AIが画像の文字・構成・狙い（誰の・どんな悩みに・何を約束しているか）を読み取り、同じレイアウトの型で別の切り口の案を描き直します。<br>
       ・1回あたり数円〜十数円のAPI料金がかかります。キーはAnthropic以外には送りません。<br>
       ・案には媒体審査で引っかかりやすい表現の注意が付きます。入稿前は人の目で確認してください。<br>
-      ・気に入った案は「色違いへ」で元画像に差し替えると、①〜④の色違いもそのまま作れます。
+      ・気に入った案は「色違いへ」を押すと、その案を元画像にして色違いタブに切り替わります。
+    </div>
     </div>
   </div>
 
   <div>
-    <div id="ideas"></div>
-    <div id="grid"><div class="empty">左で画像を入れて「生成する」を押すと、ここに並びます。<br>クリックで1枚ずつ保存、「全部ZIPで保存」でまとめて保存できます。</div></div>
+    <div id="ideas" hidden><div class="empty">左で画像を入れて「横展開（AI）」タブで「意図を読んで横展開」を押すと、ここに案が並びます。</div></div>
+    <div id="grid"><div class="empty">左で画像を入れて「色違い」タブで「生成する」を押すと、ここに並びます。<br>クリックで1枚ずつ保存、「全部ZIPで保存」でまとめて保存できます。</div></div>
   </div>
 </div>
 
@@ -453,7 +463,7 @@ function ideaCard(cv, title, why, risk, fname){
   const meta=document.createElement("div"); meta.className="meta";
   meta.innerHTML=`<span title="${fname}">${title}</span><span class="acts"><a data-a="save">保存</a><a data-a="use">色違いへ</a></span>`;
   meta.querySelector('[data-a=save]').onclick=()=>save({name:fname,cv,fmt:document.getElementById("fmt").value});
-  meta.querySelector('[data-a=use]').onclick=()=>cv.toBlob(b=>{ load(new File([b],fname.replace(/\.\w+$/,"")+".png",{type:"image/png"})); window.scrollTo({top:0,behavior:"smooth"}); },"image/png");
+  meta.querySelector('[data-a=use]').onclick=()=>cv.toBlob(b=>{ load(new File([b],fname.replace(/\.\w+$/,"")+".png",{type:"image/png"})); document.querySelector('#modeTabs button[data-m="color"]').click(); window.scrollTo({top:0,behavior:"smooth"}); },"image/png");
   card.appendChild(meta);
   const w=document.createElement("div"); w.className="why";
   w.innerHTML=(why?esc(why):"")+(risk?`<br><span class="risk">⚠ ${esc(risk)}</span>`:"");
@@ -496,6 +506,18 @@ xGo.onclick=async()=>{
   }catch(e){ xStatus.className="status err"; xStatus.textContent=e.message||String(e); }
   finally{ clearInterval(tick); xGo.disabled=false; }
 };
+
+// ---------- モード切り替え ----------
+document.querySelectorAll("#modeTabs button").forEach(bt=>bt.onclick=()=>{
+  document.querySelectorAll("#modeTabs button").forEach(x=>x.classList.toggle("on",x===bt));
+  const m=bt.dataset.m;
+  document.getElementById("mode-color").hidden = m!=="color";
+  document.getElementById("mode-ai").hidden = m!=="ai";
+  document.getElementById("grid").hidden = m!=="color";
+  document.getElementById("ideas").hidden = m!=="ai";
+  try{ localStorage.setItem("bv_mode", m); }catch(e){}
+});
+try{ const m=localStorage.getItem("bv_mode"); if(m) document.querySelector(`#modeTabs button[data-m="${m}"]`)?.click(); }catch(e){}
 </script>
 </body>
 </html>
